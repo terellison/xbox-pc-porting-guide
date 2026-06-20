@@ -95,6 +95,22 @@ never paste decompiler output directly into the reimplementation. This is
 standard practice across decomp/clone projects for legal defensibility —
 see the disclaimer in [`xbox-porting-guide.md`](../xbox-porting-guide.md).
 
+## Learning resources
+
+Structured material for the sections above, not just reference codebases:
+
+| Resource | Covers |
+|---|---|
+| [Reverse Engineering for Beginners](https://beginners.re/) (Dennis Yurichev, free PDF) | The single best on-ramp for §1 — x86 asm, calling conventions, compiler-generated patterns, RTTI, all from a reversing angle rather than a generic assembly-language angle. |
+| [OpenSecurityTraining2 — "Introductory x86"](https://opensecuritytraining.info/IntroX86.html) (free, video + slides + labs) | A real course (not just a doc) covering the same x86/calling-convention ground as §1, with hands-on labs. |
+| [Agner Fog's calling conventions doc](https://www.agner.org/optimize/calling_conventions.pdf) ([agner.org/optimize](https://www.agner.org/optimize/)) | The canonical reference for `cdecl`/`thiscall`/`stdcall`, vtable layout, and register usage — useful to have open while reading Ghidra output. |
+| [Ghidra docs and training](https://github.com/NationalSecurityAgency/ghidra) (built-in help + bundled cheat sheets) | The decompiler/tool itself, referenced in §1. |
+| [decomp.me](https://decomp.me/) | Collaborative function-matching site from the N64 decomp community (§5) — practice matching decompiled C against compiled asm on real solved examples before trying it on an Xbox title. |
+| [asm-differ](https://github.com/simonlindholm/asm-differ) | The diffing tool decomp projects use to check decompiled-and-recompiled output against the original byte-for-byte (§5). |
+| [xboxdevwiki.net](https://xboxdevwiki.net/) | Not a course, but the closest thing to a living reference for §2 — kernel ordinal tables, `.xbe` format details, NV2A notes. |
+
+None of these are Xbox-specific (no course teaches "Xbox decompilation" directly) — they teach the general x86/RE/decomp skills in §1 and §5, which you then apply to Xbox-specific knowledge from §2 by reading the reference projects below and the platform docs on xboxdevwiki.net. If you have access to someone who worked on original Xbox dev tooling or titles, that's a better resource than any doc for the undocumented quirks — ask them.
+
 ## Suggested starting point
 
 Don't start with Ninja Gaiden Black, or anything else with known unsolved
