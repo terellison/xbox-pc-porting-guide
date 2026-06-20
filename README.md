@@ -1,5 +1,7 @@
 # Xbox PC Porting Guide
 
+[![CI](https://github.com/terellison/xbox-pc-porting-guide/actions/workflows/ci.yml/badge.svg)](https://github.com/terellison/xbox-pc-porting-guide/actions/workflows/ci.yml)
+
 A guide — and a small CLI to back it up — for taking an original Xbox
 (1st gen) game you own and getting it running on Windows, whether that means
 running it under a compatibility layer or fully decompiling and recompiling

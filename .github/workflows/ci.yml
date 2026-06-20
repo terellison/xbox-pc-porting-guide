@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install toolkit
+        run: pip install -e ./toolkit
+
+      - name: Run tests
+        working-directory: toolkit
+        run: python -m unittest discover -s tests -v
+
+  # Single aggregate check to require in branch protection, so adding or
+  # removing a Python version from the matrix above doesn't break the rule.
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all test jobs passed
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "One or more test jobs failed."
+            exit 1
+          fi
+          echo "All test jobs passed."
