@@ -1,32 +1,51 @@
 # Xbox Game to PC Porting Guide
 
 ## Overview
-Decompile an original Xbox (1st gen) game disc and recompile for Windows.
+Take a game you own on original Xbox (1st gen) disc and get it running on
+Windows — either by running it under a compatibility layer/emulator, or by
+fully decompiling and recompiling it for native Windows.
+
+There's a companion CLI, [`xboxport`](toolkit/README.md), that automates the
+mechanical, legal part of this (disc extraction + executable inspection) so
+you can spend your time on the actual porting work. See
+[`docs/ninja-gaiden-black-case-study.md`](docs/ninja-gaiden-black-case-study.md)
+for a worked example of why this matters: Team Ninja has confirmed the
+*Ninja Gaiden Black* source is lost, so any modern preservation effort has to
+start exactly where this guide starts — at the disc.
 
 ---
 
 ## Legal Disclaimer
 ⚠️ **Important:**
-- Decompiling code from proprietary software may violate copyright laws (DMCA, EULAs)
-- Some games have open-source reimplementations (e.g., OpenXDK alternatives)
-- Only do this for games you own and for personal/educational use
-- Check if a clean-room reimplementation or source port already exists first
+- Decompiling proprietary software can implicate copyright law (and the
+  DMCA's anti-circumvention provisions) even when you own the disc.
+- Only do this for games you own, for personal/educational/preservation use.
+  Don't distribute disc images, extracted assets, or decompiled source.
+- Check whether a clean-room reimplementation, source port, or working
+  emulator profile already exists before starting from scratch — see
+  [Existing Projects to Reference](#existing-projects-to-reference).
 
 ---
 
 ## Step 1: Dump the Disc
 
 ### Required Tools
-- Xbox DVD drive (or external USB enclosure)
-- `xiso` or `imgburn` — extract disc image (.iso)
-- Xbox Insider Toolkit or `extract-xiso`
+- An original Xbox (or a DVD drive that can read the disc's special layout)
+- [`extract-xiso`](https://github.com/XboxDev/extract-xiso) — create/extract `.iso` images of Xbox discs
+- `xboxport iso-list` / `xboxport iso-extract` (this repo's toolkit) — inspect and pull files out of an existing `.iso` without needing a drive at all
 
 ```bash
-# Install extraction tool
-brew install xiso  # or download from GitHub
+# Build extract-xiso from source (Linux/macOS/Windows via cmake)
+git clone https://github.com/XboxDev/extract-xiso.git
+cd extract-xiso && cmake -B build && cmake --build build
 
-# Extract disc
-xiso -x game.iso ./output_folder
+# List then extract
+./build/extract-xiso -l game.iso
+./build/extract-xiso -x game.iso
+
+# Or, using this repo's toolkit on an existing image:
+xboxport iso-list game.iso
+xboxport iso-extract game.iso ./extracted
 ```
 
 ---
@@ -34,20 +53,17 @@ xiso -x game.iso ./output_folder
 ## Step 2: Analyze the Executable
 
 ### Xbox Executable Format (.xbe)
-- Xbox uses `.xbe` (Xbox Executable) format, not PE (.exe)
-- Contains signature, certificate, headers, sections
+- Xbox uses `.xbe` (Xbox Executable), not PE (.exe) — a related but distinct
+  container format with its own header, certificate, and section table.
 
 ### Tools
-- **xbedump** — inspect .xbe headers
-- **xbetool** — extract sections, resources
-- **Cxbx-Reloaded** — Xbox emulator with debug info (can extract code)
+- [`xbedump`](https://github.com/XboxDev/xbedump) — dump/sign `.xbe` headers
+- [`pyxbe`](https://github.com/mborgerson/pyxbe) — Python library to read/write `.xbe`
+- `xboxport xbe-info` (this repo's toolkit) — prints title, entry point, certificate, and section table
+- [Cxbx-Reloaded](https://github.com/Cxbx-Reloaded/Cxbx-Reloaded) / [xemu](https://github.com/xemu-project/xemu) — emulators that already parse and load `.xbe`; useful as a working reference implementation
 
 ```bash
-# Inspect .xbe
-xbedump game.xbe
-
-# Extract all sections
-xbetool extract game.xbe ./extracted/
+xboxport xbe-info ./extracted/default.xbe
 ```
 
 ---
@@ -55,59 +71,67 @@ xbetool extract game.xbe ./extracted/
 ## Step 3: Understand the Code
 
 ### Xbox Architecture
-- **CPU:** Intel Pentium III (x86)
-- **GPU:** NVIDIA NV2A (custom GeForce 3)
-- **OS:** Custom Xbox kernel (like Win2000内核)
+- **CPU:** Intel Pentium III–class (x86, no SSE2)
+- **GPU:** NVIDIA NV2A (custom GeForce 3-derived part)
+- **OS:** A heavily modified, stripped-down kernel derived from Windows 2000 — exposes Xbox-specific kernel calls, not the Win32 API
 
 ### Key Challenges
-1. **Direct hardware access** — Xbox kernel calls, not Win32 API
-2. **Graphics API** — Xbox uses custom D3D8 wrappers, not D3D9/11
-3. **Audio** — Xbox Sound System (XAudio predecessor)
-4. **No filesystem** — cached disc reads, not file I/O
+1. **Direct hardware/kernel access** — games call the Xbox kernel directly, not Win32
+2. **Graphics API** — a custom D3D8-derived API talking straight to NV2A, not D3D9/11/12
+3. **Audio** — the original Xbox Sound System (predates XAudio)
+4. **Storage access** — reads come from the XDVDFS-formatted disc/cache rather than a general filesystem
 
 ### What You'll Find
-- Compiled C/C++ (likely MSVC v6 or 2003)
-- Inline assembly for performance
-- Custom middleware (Unreal Engine 2, RenderWare)
+- Compiled C/C++ (commonly built with an MSVC-derived toolchain from the early-2000s XDK)
+- Inline assembly in hot paths
+- Often a recognizable middleware/engine (Unreal Engine 2, RenderWare, or an in-house engine)
 
 ---
 
 ## Step 4: Port to Windows
 
-### Approach A: Emulator-Based (Easier)
-Use **Cxbx-Reloaded** or **xqemu** and build a wrapper:
-1. Add Win32 API shims
-2. Replace Xbox kernel calls with Win32 equivalents
-3. Map D3D8 → D3D9 or D3D11
+### Approach A: Emulator/Compatibility Layer (Easiest)
+Run the game under [xemu](https://xemu.app/) or [Cxbx-Reloaded](https://github.com/Cxbx-Reloaded/Cxbx-Reloaded) first — check their compatibility lists, since many titles already run with no extra work:
+1. If it's not yet supported, the emulator's HLE kernel/Win32 shim layer is the reference for what a wrapper needs to do.
+2. Map D3D8 calls → D3D9/11/12 (both emulators already do this; read their source for the mapping).
 
-### Approach B: Full Decompile (Hard)
-1. Disassemble code with **IDA Pro** or **Ghidra**
-2. Reconstruct C code (clean-room, don't copy-paste)
-3. Replace Xbox APIs with Win32
-4. Recompile with MSVC or MinGW
+### Approach B: Engine-Based Port (Best, if applicable)
+If the game uses a known engine (Unreal Engine 2, RenderWare, etc.):
+1. Find the matching open-source/PC engine version.
+2. Extract assets (models, textures, audio, scripts) from the disc.
+3. Rebuild the game's content pipeline against the Windows-compatible engine.
 
-### Approach C: Open-Source Engine (Best)
-If the game uses a known engine (Unreal 2, RenderWare):
-1. Find the engine source
-2. Extract game assets (models, textures, scripts)
-3. Build against Windows-compatible engine
+### Approach C: Full Decompile (Hardest, most legal risk)
+1. Disassemble with [Ghidra](https://github.com/NationalSecurityAgency/ghidra) or IDA Pro.
+2. Reconstruct readable C/C++ — **clean-room**: write your own implementation
+   from the disassembly's observed behavior, don't transcribe verbatim.
+3. Replace Xbox kernel/D3D8 calls with Win32/D3D equivalents.
+4. Recompile with MSVC or MinGW.
+
+For homebrew/from-scratch Xbox-side development (not strictly needed for a
+PC port, but useful for understanding the XDK conventions a game was built
+against), the actively maintained SDK is
+[nxdk](https://github.com/XboxDev/nxdk) — it supersedes the now-inactive
+OpenXDK.
 
 ---
 
 ## Step 5: Build & Test
 
 ```bash
-# If using MSVC
-cl /O2 /GL game_code.cpp /link /SUBSYSTEM:CONSOLE
+# MSVC
+cl /O2 /GL game_code.cpp /link /SUBSYSTEM:WINDOWS d3d9.lib
 
-# Or MinGW
-g++ -O2 game_code.cpp -o game.exe -lws2_32 -ld3d9
+# MinGW
+g++ -O2 game_code.cpp -o game.exe -ld3d9
 ```
 
 ### Testing
-- Run in Windows compatibility mode if needed
-- Debug with WinDbg or Visual Studio
-- Expect graphics/audio glitches
+- Diff behavior against the original running in xemu/Cxbx-Reloaded — it's
+  your reference implementation for "what correct looks like."
+- Debug with WinDbg or Visual Studio.
+- Expect graphics/audio mismatches first; gameplay logic and assets are
+  usually easier than the renderer.
 
 ---
 
@@ -115,42 +139,27 @@ g++ -O2 game_code.cpp -o game.exe -lws2_32 -ld3d9
 
 | Project | Description |
 |---------|-------------|
-| [OpenXDK](https://github.com/OpenXDK/OpenXDK) | Open-source Xbox dev kit |
-| [Cxbx-Reloaded](https://github.com/Cxbx-Reloaded/Cxbx-Reloaded) | Xbox emulator (good for reference) |
-| [Dxbx](https://github.com/DxbxPC2XB_DLL) | DirectX wrapper |
-| [OpenMW](https://openmw.org/) | Morrowind reimplementation (engine-based port example) |
+| [extract-xiso](https://github.com/XboxDev/extract-xiso) | Create/extract Xbox disc images |
+| [xbedump](https://github.com/XboxDev/xbedump) | Dump/sign `.xbe` headers |
+| [pyxbe](https://github.com/mborgerson/pyxbe) | Python `.xbe` reader/writer |
+| [nxdk](https://github.com/XboxDev/nxdk) | Modern, maintained open-source Xbox SDK (successor to OpenXDK) |
+| [Cxbx-Reloaded](https://github.com/Cxbx-Reloaded/Cxbx-Reloaded) | Xbox-to-Windows HLE emulator/compatibility layer |
+| [xemu](https://github.com/xemu-project/xemu) | Actively maintained original Xbox emulator (successor to xqemu) |
+| [Dxbx](https://github.com/PatrickvL/Dxbx) | Delphi-based Xbox1 HLE emulator |
+| [DECOMP__Ninja](https://github.com/mehmetalinya/DECOMP__Ninja) | Community decompilation attempt for Ninja Gaiden Black/2 — see the [case study](docs/ninja-gaiden-black-case-study.md) |
 
 ---
 
 ## Recommended Workflow
 
-1. **Verify** no existing PC port or source port exists
-2. **Extract** disc image and inspect .xbe
-3. **Identify** engine/middleware used
-4. **Choose approach:**
-   - Engine-based port (cleanest)
-   - Wrapper/emulator approach (easiest)
-   - Full decompilation (most work, legal risk)
-5. **Start small** — get a menu screen running first
-6. **Join community** — Xbox hacking Discord, GBAtemp forums
+1. **Verify** no existing PC port, source port, or playable emulator profile exists.
+2. **Extract** the disc image (`xboxport iso-extract`) and inspect `default.xbe` (`xboxport xbe-info`).
+3. **Identify** the engine/middleware in use.
+4. **Choose an approach** — engine-based (cleanest), emulator/wrapper (easiest), or full decompile (most work, most legal risk).
+5. **Start small** — get a menu screen rendering before tackling gameplay.
+6. **Scaffold the project**: `xboxport scaffold ./my-port --xbe ./extracted/default.xbe` generates a checklist and working folders.
+7. **Join the community** — Cxbx-Reloaded/xemu Discords, GBAtemp, XboxDev — someone has often already solved your exact problem.
 
 ---
 
-## Quick Start Commands
-
-```bash
-# 1. Get xbedump
-git clone https://github.com/mborgerson/xbedump.git
-cd xbedump && mkdir build && cd build && cmake .. && make
-
-# 2. Inspect your game
-./xbedump /path/to/default.xbe
-
-# 3. Extract resources
-git clone https://github.com/bushwick-internet/xbetool.git
-./xbetool -x default.xbe ./extracted/
-```
-
----
-
-*This guide is for educational purposes. Respect copyright.*
+*This guide is for personal/educational/preservation use on games you own. Respect copyright.*
