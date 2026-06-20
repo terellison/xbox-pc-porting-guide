@@ -10,7 +10,7 @@ to address: **the original source is gone.**
   and *Ninja Gaiden 2*. When Koei Tecmo put together the *Ninja Gaiden:
   Master Collection*, it had to build from the *Sigma* re-releases instead,
   because Black/NG2's own source wasn't recoverable.
-  ([CBR](https://www.cbr.com/ninja-gaiden-black-master-collection-source-code/))
+  ([Kotaku](https://kotaku.com/koei-tecmo-couldnt-salvage-the-data-for-ninja-gaiden-bl-1846550279))
 - There's an existing community effort,
   [`mehmetalinya/DECOMP__Ninja`](https://github.com/mehmetalinya/DECOMP__Ninja),
   attempting exactly the "decompile from the disc" path this guide
